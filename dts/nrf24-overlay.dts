@@ -1,0 +1,29 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "brcm,bcm2835", "ti,am33xx";
+
+    fragment@0 {
+        target = <&spi0>;
+        __overlay__ {
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "okay";
+
+            spidev@0 {
+                status = "disabled";
+            };
+
+            nrf24@0 {
+                compatible = "nordic,nrf24l01";
+                reg = <0>;                  /* CSN en SPI0_CE0 */
+                spi-max-frequency = <2000000>;
+                
+                ce-gpios = <&gpio 25 0>;    /* Pin GPIO25 para CE */
+                interrupt-parent = <&gpio>;
+                interrupts = <24 2>;        /* Pin GPIO24 (IRQ), 2 = Trigger Falling */
+            };
+        };
+    };
+};
