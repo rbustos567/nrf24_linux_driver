@@ -18,16 +18,32 @@ Unlike user-space Python or C++ libraries, this driver interfaces directly with 
 
 ## 🔌 Hardware Wiring (Raspberry Pi Example)
 
-| nRF24L01+ Pin | Raspberry Pi Pin | Function |
+Important: It is strongly recommended to use the nRF24L01+ Adapter Module (with an on-board AMS1117 3.3V regulator and decoupling capacitors) to ensure power stability. Connect VCC of the adapter module to 5V.
+```bash
+nRF24L01+ Power Adapter Pinout
+             ┌───────────────┐
+       GND  ─┤ [1]       [2] ├─ VCC (5V Input)
+        CE  ─┤ [3]       [4] ├─ CSN
+       SCK  ─┤ [5]       [6] ├─ MOSI
+      MISO  ─┤ [7]       [8] ├─ IRQ (Unused)
+             └───────────────┘
+```
+
+## 🍓 1. Raspberry Pi 3 & Raspberry Pi 5
+
+| nRF24L01+ | RPi Physical Pin (40-pin Header) | Function / Signal |
 | :--- | :--- | :--- |
-| **VCC** | 3.3V (Pin 1) | Power (Add a 10µF capacitor across VCC/GND) |
-| **GND** | GND (Pin 6) | Ground |
-| **CSN** | SPI0_CE0 (Pin 24) | SPI Chip Select |
-| **SCK** | SPI0_SCLK (Pin 23)| SPI Clock |
-| **MOSI**| SPI0_MOSI (Pin 19)| SPI Master Out |
-| **MISO**| SPI0_MISO (Pin 21)| SPI Master In |
-| **CE**  | GPIO 22 (Pin 15)  | Chip Enable / Mode Control |
-| **IRQ** | GPIO 25 (Pin 22)  | Hardware Interrupt Line |
+| **VCC** | **Pin 2** or **Pin 4** | **5V Power** |
+| **GND** | **Pin 6** | **Ground** |
+| **CE** | **Pin 22** | **GPIO 25** |
+| **CSN** | **Pin 24** | **GPIO 8 (SPI0_CE0)** |
+| **SCK** | **Pin 23** | **GPIO 11 (SPI0_SCLK)** |
+| **MOSI** | **Pin 19** | **GPIO 10 (SPI0_MOSI)** |
+| **MISO** | **Pin 21** | **GPIO 9 (SPI0_MISO)** |
+| **IRQ** | **Pin 18**  | **GPIO 24 (Using it for Hardware Interrupt Line)** |
+
+---
+<img width="2064" height="1185" alt="raspberry-pi-5-gpio-pinout-diagram" src="https://github.com/user-attachments/assets/d86e6ee5-1cff-456e-99ff-df1ba5a1b983" />
 
 ---
 
