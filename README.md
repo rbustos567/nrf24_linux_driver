@@ -38,4 +38,33 @@ Ensure you have the Linux Kernel headers installed on your SBC:
 ```bash
 sudo apt update
 sudo apt install raspberrypi-kernel-headers build-essential
+```
+
+### 2.Compile the Driver
+```bash
+git clone [https://github.com/rbustos567/nrf24-linux-driver.git](https://github.com/rbustos567/nrf24-linux-driver.git)
+cd nrf24-linux-driver
+make
+```
+### 3. Load the Module
+```bash
+sudo insmod nrf24_driver.ko
+```
+
+### Verify device was created
+```bash
+ls -l /dev/nrf24
+ls -la /sys/nrf24/
+```
+
+## 🚀 Usage Guide
+### Reading Data (Receiver Mode)
+Simply read from /dev/nrf24. The process will sleep until a wireless packet arrives via IRQ:
+```bash
+# Continuous string reader
+sudo cat /dev/nrf24
+
+# Inspect raw hexadecimal bytes
+sudo hexdump -C /dev/nrf24
+```
 
