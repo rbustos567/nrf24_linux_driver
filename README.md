@@ -68,3 +68,45 @@ sudo cat /dev/nrf24
 sudo hexdump -C /dev/nrf24
 ```
 
+### Writing Data (Transmitter Mode)
+Write any byte sequence (up to 32 bytes per packet) to /dev/nrf24:
+```bash
+# Send a string message
+echo -n "Hello World!" | sudo tee /dev/nrf24 > /dev/null
+```
+
+## ⚙️ Hardware Control (/sys/nrf24/)
+You can read or update hardware registers at runtime without reloading the module:
+### RF Channel (channel)
+Valid range: 0 to 125 (2.400 GHz - 2.525 GHz).
+```bash
+# Check current channel
+cat /sys/nrf24/channel
+
+# Set channel to 76 (2.476 GHz)
+echo 76 | sudo tee /sys/nrf24/channel
+```
+
+### Data Rate (datarate)
+Supported options: 250k, 1M, 2M.
+```bash
+# Set air data rate to 250 kbps (Maximum sensitivity/range)
+echo "250k" | sudo tee /sys/nrf24/datarate
+```
+
+### Transmission Power (tx_power)
+Supported dBm values: -18, -12, -6, 0.
+```bash
+# Set maximum output power (0 dBm)
+echo "0" | sudo tee /sys/nrf24/tx_power
+```
+
+### Auto-Acknowledge (auto_ack)
+Enable (1) or disable (0). Disabling Auto-ACK (Fire-and-Forget mode) is strongly recommended when using low-cost clone modules.
+```bash
+# Disable Auto-ACK
+echo 0 | sudo tee /sys/nrf24/auto_ack
+```
+
+## 📜 License
+This project is licensed under the GPL-2.0 License - see the LICENSE file for details.
