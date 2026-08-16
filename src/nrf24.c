@@ -212,10 +212,87 @@ static ssize_t channel_store(struct kobject *kobj, struct kobj_attribute *attr, 
 }
 static struct kobj_attribute channel_attribute = __ATTR_RW(channel);
 
-/* Agrupar los atributos de la carpeta */
+/* --- Control de Velocidad (/sys/nrf24/datarate) --- */
+/* Valores aceptados: 250k, 1M, 2M */
+static ssize_t datarate_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
+    u8 rf_setup;
+    if (!global_nrf24_dev) return -ENODEV;
+
+    rf_setup = nrf24_read_reg(global_nrf24_dev, 0x06); /* REG_RF_SETUP */
+
+    if (rf_setup & (1 << 5))
+        return sysfs_emit(buf, "250k\n");
+    else if (rf_setup & (1 << 3))
+        return sysfs_emit(buf, "2M\n");
+    else
+        return sysfs_emit(buf, "1M\n");
+}
+
+static ssize_t datarate_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) {
+    u8 rf_setup;
+    if (!global_nrf24_dev) return -ENODEV;
+
+    mutex_lock(&global_nrf24_dev->lock);
+    rf_setup = nrf24_read_reg(global_nrf24_dev, 0x06) & ~((1 << 5) | (1 << 3));
+
+    if (sysfs_streq(buf, "250k")) {
+        rf_setup |= (1 << 5);       /* Bit RF_DR_LOW = 1 */
+    } else if (sysfs_streq(buf, "2M")) {
+        rf_setup |= (1 << 3);       /* Bit RF_DR_HIGH = 1 */
+    } else if (!sysfs_streq(buf, "1M")) {
+        mutex_unlock(&global_nrf24_dev->lock);
+        return -EINVAL;             /* Opción no válida */
+    }
+
+    nrf24_write_reg(global_nrf24_dev, 0x06, rf_setup);
+    mutex_unlock(&global_nrf24_dev->lock);
+
+    return count;
+}
+static struct kobj_attribute datarate_attribute = __ATTR_RW(datarate);
+
+/* --- Control de Potencia (/sys/nrf24/tx_power) --- */
+/* Valores aceptados (dBm): -18, -12, -6, 0 */
+static ssize_t tx_power_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
+    u8 pwr;
+    if (!global_nrf24_dev) return -ENODEV;
+
+    pwr = (nrf24_read_reg(global_nrf24_dev, 0x06) >> 1) & 0x03;
+    switch (pwr) {
+        case 0: return sysfs_emit(buf, "-18dBm\n");
+        case 1: return sysfs_emit(buf, "-12dBm\n");
+        case 2: return sysfs_emit(buf, "-6dBm\n");
+        case 3: return sysfs_emit(buf, "0dBm\n");
+    }
+    return sysfs_emit(buf, "unknown\n");
+}
+
+static ssize_t tx_power_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) {
+    u8 rf_setup, pwr_bits = 0;
+    if (!global_nrf24_dev) return -ENODEV;
+
+    if (sysfs_streq(buf, "-18"))      pwr_bits = 0;
+    else if (sysfs_streq(buf, "-12")) pwr_bits = 1;
+    else if (sysfs_streq(buf, "-6"))  pwr_bits = 2;
+    else if (sysfs_streq(buf, "0"))   pwr_bits = 3;
+    else return -EINVAL;
+
+    mutex_lock(&global_nrf24_dev->lock);
+    rf_setup = nrf24_read_reg(global_nrf24_dev, 0x06) & ~(0x06); /* Limpiar bits 2:1 */
+    rf_setup |= (pwr_bits << 1);
+    nrf24_write_reg(global_nrf24_dev, 0x06, rf_setup);
+    mutex_unlock(&global_nrf24_dev->lock);
+
+    return count;
+}
+static struct kobj_attribute tx_power_attribute = __ATTR_RW(tx_power);
+
+/* --- Grupo completo de atributos en /sys/nrf24/ --- */
 static struct attribute *nrf24_attrs[] = {
     &auto_ack_attribute.attr,
     &channel_attribute.attr,
+    &datarate_attribute.attr,
+    &tx_power_attribute.attr,
     NULL,
 };
 
