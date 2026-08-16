@@ -10,6 +10,7 @@
 #include <linux/wait.h>
 #include <linux/mutex.h>
 #include <linux/delay.h>
+#include <linux/kobject.h>
 
 #define DRIVER_NAME "nrf24"
 
@@ -53,6 +54,9 @@ struct nrf24_dev {
     u8 rx_len;
     bool data_ready;
 };
+
+static struct kobject *nrf24_kobj;
+static struct nrf24_dev *global_nrf24_dev = NULL;
 
 static void nrf24_activate(struct spi_device *spi) {
     u8 tx[2] = { CMD_ACTIVATE, 0x73 };
@@ -162,6 +166,62 @@ static int nrf24_read_buf(struct nrf24_dev *dev, u8 cmd, u8 *buf, size_t len) {
 
     return ret;
 }
+
+/* --- Control de Auto-ACK (/sys/nrf24/auto_ack) --- */
+static ssize_t auto_ack_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
+    u8 val;
+    if (!global_nrf24_dev)
+        return -ENODEV;
+
+    val = nrf24_read_reg(global_nrf24_dev, 0x01); /* REG_EN_AA */
+    return sysfs_emit(buf, "%d\n", val ? 1 : 0);  /* Retorna 1 si val > 0, de lo contrario 0 */
+    /* Necesitaremos acceso al struct del driver o leer directamente el registro SPI */
+    //return sysfs_emit(buf, "%d\n", global_nrf24_dev ? nrf24_read_reg(global_nrf24_dev, 0x01) : -1);
+}
+
+static ssize_t auto_ack_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) {
+    bool enable;
+    if (kstrtobool(buf, &enable))
+        return -EINVAL;
+
+    if (global_nrf24_dev) {
+        mutex_lock(&global_nrf24_dev->lock);
+        nrf24_write_reg(global_nrf24_dev, 0x01, enable ? 0x3F : 0x00);
+        mutex_unlock(&global_nrf24_dev->lock);
+    }
+    return count;
+}
+static struct kobj_attribute auto_ack_attribute = __ATTR_RW(auto_ack);
+
+/* --- Control del Canal RF (/sys/nrf24/channel) --- */
+static ssize_t channel_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
+    return sysfs_emit(buf, "%d\n", global_nrf24_dev ? nrf24_read_reg(global_nrf24_dev, 0x05) : -1);
+}
+
+static ssize_t channel_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) {
+    u8 ch;
+    if (kstrtou8(buf, 10, &ch) || ch > 125)
+        return -EINVAL;
+
+    if (global_nrf24_dev) {
+        mutex_lock(&global_nrf24_dev->lock);
+        nrf24_write_reg(global_nrf24_dev, 0x05, ch);
+        mutex_unlock(&global_nrf24_dev->lock);
+    }
+    return count;
+}
+static struct kobj_attribute channel_attribute = __ATTR_RW(channel);
+
+/* Agrupar los atributos de la carpeta */
+static struct attribute *nrf24_attrs[] = {
+    &auto_ack_attribute.attr,
+    &channel_attribute.attr,
+    NULL,
+};
+
+static struct attribute_group nrf24_attr_group = {
+    .attrs = nrf24_attrs,
+};
 
 /* --- Manejador de Interrupciones con Puntos de Debug --- */
 static irqreturn_t nrf24_irq_handler(int irq, void *dev_id) {
@@ -485,11 +545,28 @@ static int nrf24_probe(struct spi_device *spi) {
     spi_set_drvdata(spi, dev);
     nrf24_hw_init(dev);
 
+    /* Guardamos la referencia global para los callbacks de /sys/nrf24/ */
+    global_nrf24_dev = dev;
+
+    /* Crear directorio /sys/nrf24 */
+    nrf24_kobj = kobject_create_and_add("nrf24", NULL);
+    if (nrf24_kobj) {
+        if (sysfs_create_group(nrf24_kobj, &nrf24_attr_group)) {
+            dev_err(&spi->dev, "Error al crear archivos en /sys/nrf24\n");
+            kobject_put(nrf24_kobj);
+        }
+    }
+
     dev_info(&spi->dev, "Driver nRF24L01+ cargado correctamente (/dev/nrf24)\n");
     return 0;
 }
 
 static void nrf24_remove(struct spi_device *spi) {
+    if (nrf24_kobj)
+        kobject_put(nrf24_kobj);
+
+    global_nrf24_dev = NULL; /* Limpiamos la referencia */
+
     struct nrf24_dev *dev = spi_get_drvdata(spi);
     
     pr_info("nRF24_DEBUG: Entrando a function nrf24_remove()...\n");
