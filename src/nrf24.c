@@ -603,7 +603,7 @@ static int nrf24_probe(struct spi_device *spi) {
     dev->miscdev.name = DRIVER_NAME;
     dev->miscdev.fops = &nrf24_fops;
     dev->miscdev.parent = &spi->dev;
-REG_RX_PW_P0
+
     ret = misc_register(&dev->miscdev);
     if (ret)
         return ret;
