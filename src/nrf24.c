@@ -14,18 +14,17 @@
 
 #define DRIVER_NAME "nrf24"
 
-/* --- Comandos SPI de nRF24L01+ --- */
+/* --- nRF24L01+ SPI Commands --- */
 #define CMD_R_REGISTER         0x00
 #define CMD_W_REGISTER         0x20
 #define CMD_R_RX_PAYLOAD       0x61
 #define CMD_W_TX_PAYLOAD       0xA0
 #define CMD_FLUSH_TX           0xE1
 #define CMD_FLUSH_RX           0xE2
-#define CMD_W_ACK_PAYLOAD      0xA8
 #define CMD_R_RX_PL_WID        0x60
 #define CMD_ACTIVATE           0x50
 
-/* --- Registros nRF24L01+ --- */
+/* --- nRF24L01+ Registers --- */
 #define REG_CONFIG             0x00
 #define REG_EN_AA              0x01
 #define REG_EN_RXADDR          0x02
@@ -39,7 +38,7 @@
 #define REG_FEATURE            0x1D
 #define REG_RX_PW_P0           0x11
 
-/* --- Estructura de Contexto --- */
+/* --- Context Structure --- */
 struct nrf24_dev {
     struct spi_device *spi;
     struct gpio_desc *ce_gpio;
@@ -47,8 +46,8 @@ struct nrf24_dev {
     wait_queue_head_t rx_wq;
     struct mutex lock;
    
-    u8 *spi_tx_buf; /* Buffer DMA seguro para TX */
-    u8 *spi_rx_buf; /* Buffer DMA seguro para RX */
+    u8 *spi_tx_buf; /* DMA-safe buffer for TX */
+    u8 *spi_rx_buf; /* DMA-safe buffer for RX */
 
     u8 rx_buf[32];
     u8 rx_len;
@@ -71,7 +70,7 @@ static void nrf24_activate(struct spi_device *spi) {
     spi_sync(spi, &m);
 }
 
-/* --- Métodos auxiliares SPI --- */
+/* --- SPI Helper Methods --- */
 static u8 nrf24_read_reg(struct nrf24_dev *dev, u8 reg) {
     struct spi_transfer t = {
         .tx_buf = dev->spi_tx_buf,
@@ -123,14 +122,13 @@ static void nrf24_write_buf(struct nrf24_dev *dev, u8 cmd, const u8 *buf, size_t
     if (buf && len > 0) {
         dev_info(&dev->spi->dev, "    ✏️ [SPI WRITE REQ] cmd=0x%02x, len=%zu, tx_data: %*ph\n", cmd, len, (int)len, buf);
     } else {
-        dev_info(&dev->spi->dev, "    ✏️ [SPI WRITE REQ] cmd=0x%02x (solo comando)\n", cmd);
+        dev_info(&dev->spi->dev, "    ✏️ [SPI WRITE REQ] cmd=0x%02x (only command)\n", cmd);
     }
 
     spi_message_init(&m);
     spi_message_add_tail(&t, &m);
     spi_sync(dev->spi, &m);
 }
-
 
 static int nrf24_read_buf(struct nrf24_dev *dev, u8 cmd, u8 *buf, size_t len) {
     struct spi_transfer t = {
@@ -161,22 +159,20 @@ static int nrf24_read_buf(struct nrf24_dev *dev, u8 cmd, u8 *buf, size_t len) {
         memcpy(buf, &dev->spi_rx_buf[1], len);
         dev_info(&dev->spi->dev, "    🔍 [SPI READ RES] rx_data: %*ph\n", (int)len, buf);
     } else if (ret != 0) {
-        dev_err(&dev->spi->dev, "    🔍 [SPI READ ERR] spi_sync fallo ret=%d\n", ret);
+        dev_err(&dev->spi->dev, "    🔍 [SPI READ ERR] spi_sync failed ret=%d\n", ret);
     }
 
     return ret;
 }
 
-/* --- Control de Auto-ACK (/sys/nrf24/auto_ack) --- */
+/* --- Auto-ACK Control (/sys/nrf24/auto_ack) --- */
 static ssize_t auto_ack_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
     u8 val;
     if (!global_nrf24_dev)
         return -ENODEV;
 
     val = nrf24_read_reg(global_nrf24_dev, 0x01); /* REG_EN_AA */
-    return sysfs_emit(buf, "%d\n", val ? 1 : 0);  /* Retorna 1 si val > 0, de lo contrario 0 */
-    /* Necesitaremos acceso al struct del driver o leer directamente el registro SPI */
-    //return sysfs_emit(buf, "%d\n", global_nrf24_dev ? nrf24_read_reg(global_nrf24_dev, 0x01) : -1);
+    return sysfs_emit(buf, "%d\n", val ? 1 : 0);  /* Returns 1 if val > 0, Otherwise returns 0 */
 }
 
 static ssize_t auto_ack_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) {
@@ -193,7 +189,7 @@ static ssize_t auto_ack_store(struct kobject *kobj, struct kobj_attribute *attr,
 }
 static struct kobj_attribute auto_ack_attribute = __ATTR_RW(auto_ack);
 
-/* --- Control del Canal RF (/sys/nrf24/channel) --- */
+/* --- Control of RF Channel (/sys/nrf24/channel) --- */
 static ssize_t channel_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
     return sysfs_emit(buf, "%d\n", global_nrf24_dev ? nrf24_read_reg(global_nrf24_dev, 0x05) : -1);
 }
@@ -212,8 +208,8 @@ static ssize_t channel_store(struct kobject *kobj, struct kobj_attribute *attr, 
 }
 static struct kobj_attribute channel_attribute = __ATTR_RW(channel);
 
-/* --- Control de Velocidad (/sys/nrf24/datarate) --- */
-/* Valores aceptados: 250k, 1M, 2M */
+/* --- Data Rate Control (/sys/nrf24/datarate) --- */
+/* Possible Values: 250k, 1M, 2M */
 static ssize_t datarate_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
     u8 rf_setup;
     if (!global_nrf24_dev) return -ENODEV;
@@ -241,7 +237,7 @@ static ssize_t datarate_store(struct kobject *kobj, struct kobj_attribute *attr,
         rf_setup |= (1 << 3);       /* Bit RF_DR_HIGH = 1 */
     } else if (!sysfs_streq(buf, "1M")) {
         mutex_unlock(&global_nrf24_dev->lock);
-        return -EINVAL;             /* Opción no válida */
+        return -EINVAL;             /* Invalid Option */
     }
 
     nrf24_write_reg(global_nrf24_dev, 0x06, rf_setup);
@@ -251,8 +247,8 @@ static ssize_t datarate_store(struct kobject *kobj, struct kobj_attribute *attr,
 }
 static struct kobj_attribute datarate_attribute = __ATTR_RW(datarate);
 
-/* --- Control de Potencia (/sys/nrf24/tx_power) --- */
-/* Valores aceptados (dBm): -18, -12, -6, 0 */
+/* --- Transmission Power (/sys/nrf24/tx_power) --- */
+/* Possible Values (dBm): -18, -12, -6, 0 */
 static ssize_t tx_power_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
     u8 pwr;
     if (!global_nrf24_dev) return -ENODEV;
@@ -278,7 +274,7 @@ static ssize_t tx_power_store(struct kobject *kobj, struct kobj_attribute *attr,
     else return -EINVAL;
 
     mutex_lock(&global_nrf24_dev->lock);
-    rf_setup = nrf24_read_reg(global_nrf24_dev, 0x06) & ~(0x06); /* Limpiar bits 2:1 */
+    rf_setup = nrf24_read_reg(global_nrf24_dev, 0x06) & ~(0x06); /* Clean bits 2:1 */
     rf_setup |= (pwr_bits << 1);
     nrf24_write_reg(global_nrf24_dev, 0x06, rf_setup);
     mutex_unlock(&global_nrf24_dev->lock);
@@ -287,7 +283,7 @@ static ssize_t tx_power_store(struct kobject *kobj, struct kobj_attribute *attr,
 }
 static struct kobj_attribute tx_power_attribute = __ATTR_RW(tx_power);
 
-/* --- Grupo completo de atributos en /sys/nrf24/ --- */
+/* --- Complete group of Attributes in /sys/nrf24/  --- */
 static struct attribute *nrf24_attrs[] = {
     &auto_ack_attribute.attr,
     &channel_attribute.attr,
@@ -300,77 +296,72 @@ static struct attribute_group nrf24_attr_group = {
     .attrs = nrf24_attrs,
 };
 
-/* --- Manejador de Interrupciones con Puntos de Debug --- */
+/* --- Interrupt handler containing debug points --- */
 static irqreturn_t nrf24_irq_handler(int irq, void *dev_id) {
     struct nrf24_dev *dev = dev_id;
     u8 status;
 
-    dev_info(&dev->spi->dev, "⚡ >>> [IRQ START] Interrupción disparada en GPIO IRQ!\n");
+    dev_info(&dev->spi->dev, "⚡ >>> [IRQ START] Interruption triggered in GPIO IRQ!\n");
 
     mutex_lock(&dev->lock);
     status = nrf24_read_reg(dev, REG_STATUS);
 
-    dev_info(&dev->spi->dev, "🔔 [IRQ] Interrupción disparada! STATUS = 0x%02x (RX_DR=%d, TX_DS=%d, MAX_RT=%d)\n", status, (status >> 6) & 1, (status >> 5) & 1, (status >> 4) & 1);
+    dev_info(&dev->spi->dev, "🔔 [IRQ] Interruption triggered! STATUS = 0x%02x (RX_DR=%d, TX_DS=%d, MAX_RT=%d)\n", status, (status >> 6) & 1, (status >> 5) & 1, (status >> 4) & 1);
 
     u8 pipe = (status >> 1) & 0x07;
 
     /* RX Data Ready Interrupt (Bit 6) */
     if ((status & (1 << 6)) || pipe != 0x07) {
-        /* Leer tamaño de payload dinámico */
+	/* Reads size of dynamic payload */
         nrf24_read_buf(dev, CMD_R_RX_PL_WID, &dev->rx_len, 1);
         
-        /* Fallback: Si el chip devuelve 0 bytes o > 32, asumimos el paquete estándar de 8 bytes (int + float) */
+	/* Fallback: If chip returns 0 bytes or > 32, we assume the standard packet of 8 bytes (int + float) */
         if (dev->rx_len == 0 || dev->rx_len > 32) {
-            dev_warn(&dev->spi->dev, "⚠️ R_RX_PL_WID devolvió %d bytes. Aplicando fallback a 8 bytes...\n", dev->rx_len);
+            dev_warn(&dev->spi->dev, "⚠️ R_RX_PL_WID returned %d bytes. Applying fallback of 8 bytes...\n", dev->rx_len);
             dev->rx_len = 32;
         }
 
-        dev_info(&dev->spi->dev, "📥 [IRQ RX] Leyendo %d bytes del FIFO RX...\n", dev->rx_len);
+        dev_info(&dev->spi->dev, "📥 [IRQ RX] Reading %d bytes from FIFO RX...\n", dev->rx_len);
 
-        /* Leer el payload recibido */
+	/* Reading the received payload */
         nrf24_read_buf(dev, CMD_R_RX_PAYLOAD, dev->rx_buf, dev->rx_len);
         
-        /* Imprimir los bytes leídos en dmesg */
-        dev_info(&dev->spi->dev, "📦 [IRQ RX] Bytes leídos del chip: %*ph\n", dev->rx_len, dev->rx_buf);
+	/* Print the read bytes in dmesg */
+        dev_info(&dev->spi->dev, "📦 [IRQ RX] Bytes read from chip: %*ph\n", dev->rx_len, dev->rx_buf);
 
         dev->data_ready = true;
         wake_up_interruptible(&dev->rx_wq);
-	dev_info(&dev->spi->dev, "    [IRQ RX] wake_up_interruptible llamado (data_ready = true)\n");
+	dev_info(&dev->spi->dev, "    [IRQ RX] wake_up_interruptible called (data_ready = true)\n");
     }
 
     /* TX Data Sent (Bit 5) / Max Retries (Bit 4) */
     if (status & (1 << 5)) {
-        dev_info(&dev->spi->dev, "📤 [IRQ TX] Paquete enviado con éxito (TX_DS)\n");
+        dev_info(&dev->spi->dev, "📤 [IRQ TX] Packet successfully sent (TX_DS)\n");
     }
     if (status & (1 << 4)) {
-//        dev_warn(&dev->spi->dev, "⚠️ [IRQ TX] Reintentos máximos alcanzados sin ACK (MAX_RT). Ejecutando FLUSH_TX...\n");
-//        u8 cmd = CMD_FLUSH_TX;
-//        spi_write(dev->spi, &cmd, 1);
-        dev_warn(&dev->spi->dev, "    [IRQ TX] Error MAX_RT (Reintentos máximos alcanzados). Ejecutando FLUSH_TX...\n");
+        dev_warn(&dev->spi->dev, "    [IRQ TX] Error MAX_RT (Reached maximum retries). Executing FLUSH_TX...\n");
         nrf24_read_buf(dev, CMD_FLUSH_TX, NULL, 0);
     }
 
-    /* Limpiar flags de interrupción escribiendo '1' en los bits 4, 5 y 6 */
-//    nrf24_write_reg(dev, REG_STATUS, status | 0x70);
     nrf24_write_reg(dev, REG_STATUS, 0x70);
-    dev_info(&dev->spi->dev, "    [IRQ ACK] STATUS limpiado con 0x70\n");
+    dev_info(&dev->spi->dev, "    [IRQ ACK] Cleaning STATUS with 0x70\n");
     mutex_unlock(&dev->lock);
 
-    dev_info(&dev->spi->dev, "⚡ <<< [IRQ END] Manejador de interrupción completado\n");
+    dev_info(&dev->spi->dev, "⚡ <<< [IRQ END] Interrupt Handler Completed\n");
 
     return IRQ_HANDLED;
 }
 
-/* --- Operación Read con Puntos de Debug --- */
+/* --- Read Operation with Debug points */
 static ssize_t nrf24_read(struct file *file, char __user *buf, size_t count, loff_t *ppos) {
     struct nrf24_dev *dev = container_of(file->private_data, struct nrf24_dev, miscdev);
 
-    dev_info(&dev->spi->dev, "📖 [READ] Solicitud de lectura de User-Space. Esperando en cola (data_ready=%d)...\n", dev->data_ready);
+    dev_info(&dev->spi->dev, "📖 [READ] Read request from User-Space. Waiting queue (data_ready=%d)...\n", dev->data_ready);
 
     if (wait_event_interruptible(dev->rx_wq, dev->data_ready))
         return -ERESTARTSYS;
 
-    dev_info(&dev->spi->dev, "⏰ [READ] Proceso despertó de la cola! Copiando %d bytes a User-Space...\n", dev->rx_len);
+    dev_info(&dev->spi->dev, "⏰ [READ] Process woke up from queue! Copying %d bytes to User-Space...\n", dev->rx_len);
 
     mutex_lock(&dev->lock);
     if (count > dev->rx_len)
@@ -384,7 +375,7 @@ static ssize_t nrf24_read(struct file *file, char __user *buf, size_t count, lof
     dev->data_ready = false;
     mutex_unlock(&dev->lock);
 
-    dev_info(&dev->spi->dev, "✅ [READ] Copia a User-Space completada con éxito (%zd bytes)\n", count);
+    dev_info(&dev->spi->dev, "✅ [READ] Copy to User-Space was successfully completed (%zd bytes)\n", count);
     return count;
 }
 
@@ -392,35 +383,35 @@ static ssize_t nrf24_write(struct file *file, const char __user *buf, size_t cou
     struct nrf24_dev *dev = container_of(file->private_data, struct nrf24_dev, miscdev);
     u8 config;
 
-    dev_info(&dev->spi->dev, "📝 >>> [WRITE START] Solicitud de envío de User-Space (%zu bytes)\n", count);
+    dev_info(&dev->spi->dev, "📝 >>> [WRITE START] Request sending from User-Space (%zu bytes)\n", count);
     if (count > 32)
         count = 32;
 
     mutex_lock(&dev->lock);
 
-    /* 1. Copiar datos desde User-Space al buffer del kernel */
+    /* 1. Copy data from User-Space to kernel buffer */ 
     if (copy_from_user(dev->rx_buf, buf, count)) {
         mutex_unlock(&dev->lock);
 	dev_err(&dev->spi->dev, "    [WRITE ERR] copy_from_user falló\n");
         return -EFAULT;
     }
 
-    /* 2. Cambiar a Modo Transmisor (PRIM_RX = 0) */
+    /* 2. Switch to Transmisor Mode (PRIM_RX =0 )*/
     config = nrf24_read_reg(dev, REG_CONFIG);
     nrf24_write_reg(dev, REG_CONFIG, config & ~0x01);
 
-    /* 3. Limpiar TX FIFO y cargar el nuevo payload */
+    /* 3. Clean TX FIFO and load new payload */
     nrf24_write_buf(dev, CMD_FLUSH_TX, NULL, 0);
     nrf24_write_buf(dev, CMD_W_TX_PAYLOAD, dev->rx_buf, count);
 
-    /* 4. Pulsar CE durante 15 us para iniciar la transmisión por aire */
+    /* 4. Pulse CE for 15 us to initiate over the air transmission */
     gpiod_set_value(dev->ce_gpio, 1);
     udelay(15);
     gpiod_set_value(dev->ce_gpio, 0);
 
     mutex_unlock(&dev->lock);
 
-    dev_info(&dev->spi->dev, "📝 <<< [WRITE END] Pulso CE completado\n");
+    dev_info(&dev->spi->dev, "📝 <<< [WRITE END] CE Pulse completed \n");
 
     return count;
 }
@@ -438,7 +429,7 @@ static void nrf24_print_details(struct nrf24_dev *dev) {
     u8 rx_p2, rx_p3, rx_p4, rx_p5;
     u8 rx_pw[6];
 
-    /* 1. Leer Registros Simples por SPI */
+    /* 1. Read simple registers for SPI */
     status    = nrf24_read_reg(dev, REG_STATUS);
     config    = nrf24_read_reg(dev, REG_CONFIG);
     rf_ch     = nrf24_read_reg(dev, REG_RF_CH);
@@ -448,7 +439,7 @@ static void nrf24_print_details(struct nrf24_dev *dev) {
     dynpd     = nrf24_read_reg(dev, REG_DYNPD);
     feature   = nrf24_read_reg(dev, REG_FEATURE);
 
-    /* 2. Leer Direcciones de Pipes */
+    /* 2. Read Pipe Directions */
     nrf24_read_buf(dev, CMD_R_REGISTER | REG_RX_ADDR_P0, rx_p0, 5);
     nrf24_read_buf(dev, CMD_R_REGISTER | 0x0B, rx_p1, 5); // REG_RX_ADDR_P1
     rx_p2 = nrf24_read_reg(dev, 0x0C); // P2
@@ -457,12 +448,12 @@ static void nrf24_print_details(struct nrf24_dev *dev) {
     rx_p5 = nrf24_read_reg(dev, 0x0F); // P5
     nrf24_read_buf(dev, CMD_R_REGISTER | REG_TX_ADDR, tx_addr, 5);
 
-    /* 3. Leer Tamaños de Payloads Estáticos (RX_PW_P0..P5) */
+    /* 3. Read sizes of Static Payloads (RX_PW_P0..P5) */
     for (int i = 0; i < 6; i++) {
         rx_pw[i] = nrf24_read_reg(dev, 0x11 + i);
     }
 
-    /* 4. Imprimir Configuración formateada en dmesg */
+    /* 4. Print formatted Configuration in dmesg */
     dev_info(&dev->spi->dev, "================ SPI Configuration ================\n");
     dev_info(&dev->spi->dev, "CSN Pin          = SPI Bus %d, CS %d\n", dev->spi->controller->bus_num, spi_get_chipselect(dev->spi, 0));
     dev_info(&dev->spi->dev, "SPI Speed        = %d Mhz\n", dev->spi->max_speed_hz / 1000000);
@@ -492,77 +483,75 @@ static void nrf24_print_details(struct nrf24_dev *dev) {
     dev_info(&dev->spi->dev, "CONFIG           = 0x%02x\n", config);
     dev_info(&dev->spi->dev, "DYNPD/FEATURE    = 0x%02x 0x%02x\n", dynpd, feature);
     
-    /* Decodificación de Data Rate */
+    /* Decoding Data Rate */
     const char *dr_str = "1 Mbps";
     if (rf_setup & (1 << 5)) dr_str = "250 Kbps";
     else if (rf_setup & (1 << 3)) dr_str = "2 Mbps";
     dev_info(&dev->spi->dev, "Data Rate        = %s\n", dr_str);
 
-    /* Decodificación de Potencia PA */
+    /* Decoding PA Power */
     u8 pa_pwr = (rf_setup >> 1) & 0x03;
     const char *pa_str = (pa_pwr == 3) ? "PA_MAX" : (pa_pwr == 2) ? "PA_HIGH" : (pa_pwr == 1) ? "PA_LOW" : "PA_MIN";
     dev_info(&dev->spi->dev, "PA Power         = %s\n", pa_str);
 
-    /* Decodificación de CRC */
+    /* Decoding CRC */
     dev_info(&dev->spi->dev, "CRC Length       = %s\n",
              (config & (1 << 3)) ? ((config & (1 << 2)) ? "16 bits" : "8 bits") : "Disabled");
 }
 
-/* --- Inicialización de los Registros del Radio --- */
+/* --- Initialization of Radio registers --- */
 static void nrf24_hw_init(struct nrf24_dev *dev) {
     
-    pr_info("nRF24_DEBUG: Entrando a funcion nrf24_hw_init()...\n");
+    pr_info("nRF24_DEBUG: Entering funcion nrf24_hw_init()...\n");
 
     const u8 addr[5] = "1Node";
     u8 cmd_ftx = CMD_FLUSH_TX;
     u8 cmd_frx = CMD_FLUSH_RX;
 
-    /* Desactivar CE para poder configurar */
+    /* Deactivate CE to start configuration */
     gpiod_set_value(dev->ce_gpio, 0);
 
-    /* 1. Limpiar FIFOs y Resetear Flags de STATUS a 0x0E */
+    /* 1. Clean FIFOs and Reset STATUS Flags at 0x0E */
     spi_write(dev->spi, &cmd_ftx, 1);
     spi_write(dev->spi, &cmd_frx, 1);
-    nrf24_write_reg(dev, REG_STATUS, 0x70); // Escribir '1's limpia los flags de IRQ
+    nrf24_write_reg(dev, REG_STATUS, 0x70); // Write '1's to clean all IRQ Flags
 
-    /* 2. Canal 108 (0x6C) */
+    /* 2. Channel 108 (0x6C) */
     nrf24_write_reg(dev, REG_RF_CH, 108);
 
     /* 3. 250 kbps + PA_MIN + LNA High Current -> 0x21 */
     nrf24_write_reg(dev, REG_RF_SETUP, 0x21);
 
-    /* 4. Auto-ACK en todos los Pipes (0x3F) y Habilitar Pipes 0 y 1 (0x03) */
-    //nrf24_write_reg(dev, REG_EN_AA, 0x3F);
-    // Desactivando Auto-ACK temporalmente
+    /* Deactivate Auto-ACK */
     nrf24_write_reg(dev, REG_EN_AA, 0x00);
 
     nrf24_write_reg(dev, REG_EN_RXADDR, 0x03);
 
-    /* 5. Retries: 15 reintentos con delay de 1500us (0xFF) */
+    /* 5. Retries: 15 retries with 1500us delay (0xFF) */
     nrf24_write_reg(dev, REG_SETUP_RETR, 0xFF);
 
-    /* DESBLOQUEAR CARACTERÍSTICAS AVANZADAS (R_RX_PL_WID y Dynamic Payloads) */
+    /* Unblock advance characteristics (R_RX_PL_WID and Dynamic Payloads) */
     nrf24_activate(dev->spi);
 
-    /* 6. Habilitar Dynamic Payloads en todos los Pipes (0x3F) y ACK Payloads (0x06) */
+    /* 6. Enable Dynamic Payloads on all Pipes (0x3F) and ACK Payloads (0x06) */
     nrf24_write_reg(dev, REG_FEATURE, 0x06); // EN_DPL | EN_ACK_PAY
     nrf24_write_reg(dev, REG_DYNPD, 0x3F);   // DPL en Pipes 0-5
 
-    /* 7. Configurar Dirección "1Node" */
+    /* 7. Configure Direction "1Node" */
     nrf24_write_buf(dev, CMD_W_REGISTER | REG_RX_ADDR_P0, addr, 5);
     nrf24_write_buf(dev, CMD_W_REGISTER | REG_TX_ADDR, addr, 5);
 
-    /* 8. CONFIG = 0x0F (CRC 16bit + PWR_UP + PRIM_RX + IRQs Habilitadas)
-     * Nota: 0x0F es Modo Receptor (RX). Para Transmisor (TX) se usa 0x0E. */
+    /* 8. CONFIG = 0x0F (CRC 16bit + PWR_UP + PRIM_RX + Enabled IRQs)
+     * Note: 0x0F is Receptor Mode (RX). For Transmisor Mode (TX) use 0x0E. */
     nrf24_write_reg(dev, REG_CONFIG, 0x0F);
 
-    /* 9. Configurar tamaño de payload estático a 32 bytes para Pipe 0 */
+    /* 9. Configure static payload size with 32 bytes for Pipe 0 */
     nrf24_write_reg(dev, REG_RX_PW_P0, 32);
 
     mdelay(5);
-    gpiod_set_value(dev->ce_gpio, 1); // CE High para comenzar escucha (PRX)
+    gpiod_set_value(dev->ce_gpio, 1); // CE High to start listening (PRX)
 
-    /* Imprimir tabla idéntica en dmesg */
+    /* Print table details in dmesg */
     nrf24_print_details(dev);
 
 }
@@ -572,13 +561,13 @@ static int nrf24_probe(struct spi_device *spi) {
     struct nrf24_dev *dev;
     int ret;
 
-    pr_info("nRF24_DEBUG: Entrando a funcion nrf24_probe()...\n");
+    pr_info("nRF24_DEBUG: Entering funcion nrf24_probe()...\n");
 
     dev = devm_kzalloc(&spi->dev, sizeof(*dev), GFP_KERNEL);
     if (!dev)
         return -ENOMEM;
 
-    /* Asignación de Buffers DMA-safe para SPI */
+    /* Assign buffers DMA-safe for SPI */
     dev->spi_tx_buf = devm_kzalloc(&spi->dev, 33, GFP_KERNEL | GFP_DMA);
     dev->spi_rx_buf = devm_kzalloc(&spi->dev, 33, GFP_KERNEL | GFP_DMA);
     if (!dev->spi_tx_buf || !dev->spi_rx_buf)
@@ -588,33 +577,33 @@ static int nrf24_probe(struct spi_device *spi) {
     mutex_init(&dev->lock);
     init_waitqueue_head(&dev->rx_wq);
 
-    /* Obtener línea GPIO de Chip Enable (CE) */
+    /* Obtain GPIO Chip Enable (CE) */
     dev->ce_gpio = devm_gpiod_get(&spi->dev, "ce", GPIOD_OUT_LOW);
     if (IS_ERR(dev->ce_gpio)) {
-        dev_err(&spi->dev, "Error al solicitar GPIO CE\n");
+        dev_err(&spi->dev, "Error while requesting GPIO CE\n");
         return PTR_ERR(dev->ce_gpio);
     }
 
-    /* Configurar Interrupción por Hardware en flanco de bajada (IRQ pin) */
+    /* Configure Interruption via Hardware when going from HIGH to LOW (IRQ pin)*/
     if (spi->irq > 0) {
         ret = devm_request_threaded_irq(&spi->dev, spi->irq, NULL, nrf24_irq_handler,
                                         IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
                                         DRIVER_NAME, dev);
         if (ret) {
-            dev_err(&spi->dev, "Fallo al solicitar IRQ %d\n", spi->irq);
+            dev_err(&spi->dev, "Failed when requesting IRQ %d\n", spi->irq);
             return ret;
         }
     } else {
-        dev_err(&spi->dev, "No se definió IRQ válida para el dispositivo\n");
+        dev_err(&spi->dev, "IRQ was not valid in device\n");
         return -EINVAL;
     }
 
-    /* Registrar dispositivo de carácter */
+    /* Register char device */
     dev->miscdev.minor = MISC_DYNAMIC_MINOR;
     dev->miscdev.name = DRIVER_NAME;
     dev->miscdev.fops = &nrf24_fops;
     dev->miscdev.parent = &spi->dev;
-
+REG_RX_PW_P0
     ret = misc_register(&dev->miscdev);
     if (ret)
         return ret;
@@ -622,19 +611,19 @@ static int nrf24_probe(struct spi_device *spi) {
     spi_set_drvdata(spi, dev);
     nrf24_hw_init(dev);
 
-    /* Guardamos la referencia global para los callbacks de /sys/nrf24/ */
+    /* Saving the global reference for callbacks in /sys/nrf24 */
     global_nrf24_dev = dev;
 
-    /* Crear directorio /sys/nrf24 */
+    /* Creating directory /sys/nrf24 */
     nrf24_kobj = kobject_create_and_add("nrf24", NULL);
     if (nrf24_kobj) {
         if (sysfs_create_group(nrf24_kobj, &nrf24_attr_group)) {
-            dev_err(&spi->dev, "Error al crear archivos en /sys/nrf24\n");
+            dev_err(&spi->dev, "Error when creating files in /sys/nrf24\n");
             kobject_put(nrf24_kobj);
         }
     }
 
-    dev_info(&spi->dev, "Driver nRF24L01+ cargado correctamente (/dev/nrf24)\n");
+    dev_info(&spi->dev, "Driver nRF24L01+ loaded correctly (/dev/nrf24)\n");
     return 0;
 }
 
@@ -642,11 +631,11 @@ static void nrf24_remove(struct spi_device *spi) {
     if (nrf24_kobj)
         kobject_put(nrf24_kobj);
 
-    global_nrf24_dev = NULL; /* Limpiamos la referencia */
+    global_nrf24_dev = NULL; /* Cleaning reference */
 
     struct nrf24_dev *dev = spi_get_drvdata(spi);
     
-    pr_info("nRF24_DEBUG: Entrando a function nrf24_remove()...\n");
+    pr_info("nRF24_DEBUG: Entering function nrf24_remove()...\n");
     gpiod_set_value(dev->ce_gpio, 0);
     nrf24_write_reg(dev, REG_CONFIG, 0x00); // Power Down
     misc_deregister(&dev->miscdev);
@@ -670,5 +659,5 @@ static struct spi_driver nrf24_driver = {
 module_spi_driver(nrf24_driver);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Driver Engineer");
-MODULE_DESCRIPTION("Driver Kernel de Linux para transceptor nRF24L01+ vía SPI e Interrupciones");
+MODULE_AUTHOR("Ricardo Bustos");
+MODULE_DESCRIPTION("Linux Kernel Driver for nRF24L01+ Transceiver via SPI and Interrupts");
