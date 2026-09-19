@@ -53,7 +53,7 @@ nRF24L01+ Power Adapter Pinout
 Ensure you have the Linux Kernel headers installed on your SBC:
 ```bash
 sudo apt update
-sudo apt install raspberrypi-kernel-headers build-essential device-tree-compiler
+sudo apt install raspberrypi-kernel-headers build-essential device-tree-compiler linux-headers-$(uname -r)
 ```
 
 ### 2. Clone this repository
