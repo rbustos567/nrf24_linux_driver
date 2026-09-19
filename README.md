@@ -74,12 +74,16 @@ dtc -@ -I dts -O dtb -o nrf24.dtbo nrf24-overlay.dts
 sudo cp nrf24.dtbo /boot/overlays/
 # Enable it by adding the following line to /boot/firmware/config.txt or /boot/config.txt (depending on your OS version):
 dtoverlay=nrf24
+# Reboot the system to apply the Device Tree changes
+sudo reboot
 ```
 #### For BeagleBone Black:
 ```bash
 sudo cp nrf24.dtbo /lib/firmware/
 # Enable it in /boot/uEnv.txt:
 uboot_overlay_addr0=/lib/firmware/nrf24.dtbo
+# Reboot the board for U-Boot to load the overlay at startup
+sudo reboot
 ```
 
 ### 5. Compile the Driver
