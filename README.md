@@ -53,21 +53,46 @@ nRF24L01+ Power Adapter Pinout
 Ensure you have the Linux Kernel headers installed on your SBC:
 ```bash
 sudo apt update
-sudo apt install raspberrypi-kernel-headers build-essential
+sudo apt install raspberrypi-kernel-headers build-essential device-tree-compiler
 ```
 
-### 2.Compile the Driver
+### 2. Clone this repository
+Clone this repository
 ```bash
 git clone https://github.com/rbustos567/nrf24_linux_driver.git
-cd nrf24_linux_driver/src
+```
+
+### 3. Compile the DTS source file
+```bash
+cd nrf24_linux_driver/dts
+dtc -@ -I dts -O dtb -o nrf24.dtbo nrf24-overlay.dts
+```
+
+### 4. Install and apply the overlay
+#### For Raspberry Pi:
+```bash
+sudo cp nrf24.dtbo /boot/overlays/
+# Enable it by adding the following line to /boot/firmware/config.txt or /boot/config.txt (depending on your OS version):
+dtoverlay=nrf24
+```
+#### For BeagleBone Black:
+```bash
+sudo cp nrf24.dtbo /lib/firmware/
+# Enable it in /boot/uEnv.txt:
+uboot_overlay_addr0=/lib/firmware/nrf24.dtbo
+```
+
+### 5. Compile the Driver
+```bash
+cd ../src
 make
 ```
-### 3. Load the Module
+### 6. Load the Module
 ```bash
 sudo insmod nrf24.ko
 ```
 
-### Verify device was created
+### 7. Verify device was created
 ```bash
 ls -l /dev/nrf24
 ls -la /sys/nrf24/
