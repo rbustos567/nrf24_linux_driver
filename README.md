@@ -74,8 +74,12 @@ dtc -@ -I dts -O dtb -o nrf24.dtbo nrf24-overlay.dts
 sudo cp nrf24.dtbo /boot/overlays/
 # Enable it by adding the following line to /boot/firmware/config.txt or /boot/config.txt (depending on your OS version):
 dtoverlay=nrf24
+# Ensure the primary SPI Controller is enabled in /boot/firmware/config.txt or /boot/config.txt (depending on your OS version):
+dtparam=spi=on
 # Reboot the system to apply the Device Tree changes
 sudo reboot
+# After rebooting, verify that the SPI interface is active
+ls -l /dev/spidev*
 ```
 #### For BeagleBone Black:
 ```bash
@@ -84,6 +88,10 @@ sudo cp nrf24.dtbo /lib/firmware/
 uboot_overlay_addr0=/lib/firmware/nrf24.dtbo
 # Reboot the board for U-Boot to load the overlay at startup
 sudo reboot
+# Check if spidev device is present
+ls -l /dev/spidev*
+# Verify overlay loading in kernel logs
+dmesg | grep -i "spi"
 ```
 
 ### 5. Compile the Driver
