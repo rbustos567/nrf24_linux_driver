@@ -76,8 +76,8 @@ sudo cp nrf24.dtbo /boot/overlays/
 dtoverlay=nrf24
 # Ensure the primary SPI Controller is enabled in /boot/firmware/config.txt or /boot/config.txt (depending on your OS version):
 dtparam=spi=on
-# Reboot the system to apply the Device Tree changes
-sudo reboot
+# Shutdown and restart the system to apply the Device Tree changes
+sudo shutdown now
 # After rebooting, verify that the SPI interface is active
 ls -l /dev/spidev*
 ```
@@ -86,8 +86,8 @@ ls -l /dev/spidev*
 sudo cp nrf24.dtbo /lib/firmware/
 # Enable it in /boot/uEnv.txt:
 uboot_overlay_addr0=/lib/firmware/nrf24.dtbo
-# Reboot the board for U-Boot to load the overlay at startup
-sudo reboot
+# Shutdown and restart the system to apply the Device Tree changes
+sudo shutdown now
 # Check if spidev device is present
 ls -l /dev/spidev*
 # Verify overlay loading in kernel logs
