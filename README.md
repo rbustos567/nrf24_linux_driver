@@ -71,6 +71,7 @@ sudo insmod nrf24.ko
 ```bash
 ls -l /dev/nrf24
 ls -la /sys/nrf24/
+lsmod | grep nrf24
 ```
 
 ## 🚀 Usage Guide
