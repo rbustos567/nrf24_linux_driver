@@ -15,6 +15,14 @@ Unlike user-space Python or C++ libraries, this driver interfaces directly with 
 * **Clone-Friendly:** Configurable Auto-ACK toggle to support low-cost or asymmetric nRF24 modules.
 
 ---
+## IMPORTANT NOTE: Hardware Limitations and Clone Modules
+
+Many low-cost nRF24L01+ modules available on the market are unofficial clones or counterfeit chips (often labeled as Si24R1 or generic clones). Due to manufacturing variations or silicon defects, several of these clone modules exhibit hardware-level flaws where they can only function as transmitters (TX) or only as receivers (RX), but fail when switching modes dynamically.
+
+As a result, hardware ACK (Acknowledgement) and dynamic bidirectional payload exchanges may fail silently or drop packets consistently.
+
+Consequently, the current implementation operates as a unidirectional (UDP-style) communication link. Data frames are transmitted without waiting for hardware ACKs, making it critical to test and verify module capabilities if bidirectional transmission or ACK payloads are required for your setup.
+---
 
 ## 🔌 Hardware Wiring (Raspberry Pi Example)
 
