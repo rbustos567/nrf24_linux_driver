@@ -92,10 +92,18 @@ make
 sudo insmod nrf24.ko
 ```
 
-### 7. Verify device was created
+### 7. Verify module loading and kernel logs
 ```bash
-ls -l /dev/nrf24
+# Check loaded module status
+lsmod | grep nrf24_driver
+
+# View kernel debug output
+dmesg | tail -n 30
+
+# device char was created
 ls -la /sys/nrf24/
+
+# List module was uploaded
 lsmod | grep nrf24
 ```
 
@@ -148,6 +156,12 @@ Enable (1) or disable (0). Disabling Auto-ACK (Fire-and-Forget mode) is strongly
 ```bash
 # Disable Auto-ACK
 echo 0 | sudo tee /sys/nrf24/auto_ack
+```
+
+### Unload the kernel Module
+To remove the module from memory during testing or driver updates:
+```bash
+sudo rmmod nrf24
 ```
 
 ## 📜 License
