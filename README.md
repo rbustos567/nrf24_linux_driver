@@ -106,9 +106,6 @@ sudo insmod nrf24.ko
 
 ### 7. Verify module loading and kernel logs
 ```bash
-# Check loaded module status
-lsmod | grep nrf24_driver
-
 # View kernel debug output
 dmesg | tail -n 30
 
