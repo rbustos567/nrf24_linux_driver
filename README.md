@@ -64,7 +64,7 @@ make
 ```
 ### 3. Load the Module
 ```bash
-sudo insmod nrf24_driver.ko
+sudo insmod nrf24.ko
 ```
 
 ### Verify device was created
