@@ -59,7 +59,7 @@ sudo apt install raspberrypi-kernel-headers build-essential
 ### 2.Compile the Driver
 ```bash
 git clone https://github.com/rbustos567/nrf24_linux_driver.git
-cd nrf24_linux_driver
+cd nrf24_linux_driver/src
 make
 ```
 ### 3. Load the Module
