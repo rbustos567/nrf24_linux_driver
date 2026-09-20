@@ -19,9 +19,9 @@ Unlike user-space Python or C++ libraries, this driver interfaces directly with 
 
 Many low-cost nRF24L01+ modules available on the market are unofficial clones or counterfeit chips (often labeled as Si24R1 or generic clones). Due to manufacturing variations or silicon defects, several of these clone modules exhibit hardware-level flaws where they can only function as transmitters (TX) or only as receivers (RX), but fail when switching modes dynamically.
 
-As a result, hardware ACK (Acknowledgement) and dynamic bidirectional payload exchanges may fail silently or drop packets consistently.
+Labeling Recommendation: It is strongly recommended to test your individual modules, identify which ones work strictly for transmitting or receiving, and physically label or tag each module accordingly to avoid troubleshooting non-functional configurations in future setups.
 
-Consequently, the current implementation operates as a unidirectional (UDP-style) communication link. Data frames are transmitted without waiting for hardware ACKs, making it critical to test and verify module capabilities if bidirectional transmission or ACK payloads are required for your setup.
+As a result of these hardware limitations, hardware ACK (Acknowledgement) and dynamic bidirectional payload exchanges may fail silently or drop packets consistently. Consequently, the current driver implementation operates as a unidirectional (UDP-style) communication link, where data frames are transmitted without waiting for hardware ACKs.
 ---
 
 ## 🔌 Hardware Wiring (Raspberry Pi Example)
