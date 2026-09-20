@@ -22,6 +22,7 @@ Many low-cost nRF24L01+ modules available on the market are unofficial clones or
 Labeling Recommendation: It is strongly recommended to test your individual modules, identify which ones work strictly for transmitting or receiving, and physically label or tag each module accordingly to avoid troubleshooting non-functional configurations in future setups.
 
 As a result of these hardware limitations, hardware ACK (Acknowledgement) and dynamic bidirectional payload exchanges may fail silently or drop packets consistently. Consequently, the current driver implementation operates as a unidirectional (UDP-style) communication link, where data frames are transmitted without waiting for hardware ACKs.
+
 ---
 
 ## 🔌 Hardware Wiring (Raspberry Pi Example)
